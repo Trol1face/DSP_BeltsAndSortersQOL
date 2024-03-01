@@ -46,8 +46,8 @@ namespace FastBeltsSortersBuild
                     bool foundInsertIndex = false;
                     bool foundContinueLabelIndex = false;
                     int insertIndex = -1;
-                    int continueLabelIndex = -1;
-                    int falseLabelIndex = -1;
+                    int continueLabelIndex = -1;//skip onUp && waitForConfirm if onDown is true
+                    int falseLabelIndex = -1; //jump here if condition is false, to the end of method
                     // Grab all the instructions
                     var codes = new List<CodeInstruction>(instructions);
                     for(int i = 0; i < codes.Count; i++)
@@ -55,23 +55,23 @@ namespace FastBeltsSortersBuild
                         if(!foundInsertIndex && codes[i].opcode == OpCodes.Ldfld && codes[i].operand is FieldInfo f && f == insertAnchor)
                         {
                             //Debug.Log(" insertIndex Detected in this line: " + i);
-                            foundInsertIndex = true;
+                            foundInsertIndex = true;// Skip this if if we found it once
                             insertIndex = i;
                         }
                         if(!foundContinueLabelIndex && codes[i].opcode == OpCodes.Call && codes[i].operand is MethodInfo m && m == continueLabelAnchor){
                             //Debug.Log(" continueLabelIndex Detected in this line: " + i);
-                            foundContinueLabelIndex = true;
+                            foundContinueLabelIndex = true;// Skip this if if we found it once
                             continueLabelIndex = i;
                         }
                         if(codes[i].opcode == OpCodes.Ldc_I4_0) {
                             //Debug.Log(" falseLabelIndex Detected in this line: " + i);
-                            falseLabelIndex = i;
+                            falseLabelIndex = i;//Need the last of this opcodes
                         }
                     }
                     if (insertIndex > -1 && continueLabelIndex > -1 && falseLabelIndex > -1)
                     {
-                        //target and delete the condition
-                        insertIndex -= 1;    
+                        //target and delete the condition.
+                        insertIndex -= 1;//before onDown field here is a line with method get__buildConfirm, i'm deleting that too
                         codes[continueLabelIndex].labels.Add(continueLabel);
                         codes[falseLabelIndex].labels.Add(falseLabel);
                         codes.RemoveRange(insertIndex, 3);
