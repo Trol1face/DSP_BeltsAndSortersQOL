@@ -1,16 +1,10 @@
 ﻿using BepInEx;
-using BepInEx.Logging;
 using BepInEx.Configuration;
 using HarmonyLib;
-using System;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Collections.Generic;
-using System.Text;
-using UnityEngine;
-using UnityEngine.UI;
 using System.Linq;
-using System.ComponentModel;
 
 namespace FastBeltsSortersBuild
 {
@@ -157,32 +151,30 @@ namespace FastBeltsSortersBuild
                     var codes = new List<CodeInstruction>(instructions);
                     for(int i = codes.Count-1; i >= 5; i--)
                     {
-                        //Debug.Log("  [" + i + "]: " + codes[i].ToString());
+                        /*
+                        A lot of IFs to be sure that label will be placed in the right spot
+                        */
                         if(!jumpDestinationIndexFound) {
                             if(codes[i].opcode == OpCodes.Call){
-                                //Debug.Log("-----------Found Call at " + i);
                                 if(codes[i-1].opcode == OpCodes.Call && codes[i-1].operand is MethodInfo m1 && m1 == anchor){
-                                    //Debug.Log("-----------Found buildpreviews at " + (i-1));
                                     if(codes[i-2].opcode == OpCodes.Ldarg_0 && codes[i-3].opcode == OpCodes.Ldarg_0) {
-                                        //Debug.Log("-----------Found jump destination: " + i);
                                         jumpDestinationIndexFound = true;
                                         jumpDestinationIndex = i - 3;
                                     }
                                 }
                             }
                         }
+                        /*
+                        A lot of IFs to be sure that Br opcode (jump) will be placed in the right spot
+                        */
                         if(codes[i].opcode == OpCodes.Call && codes[i].operand is MethodInfo m2 && m2 == anchor)
                         {
-                            //Debug.Log("-----------Found anchor at " + i);
                             if(codes[i-1].opcode == OpCodes.Ldarg_0)
                             {
-                                //Debug.Log("-----------Found Ldarg_0 " + (i - 1));
                                 if(codes[i-2].opcode == OpCodes.Stloc_S)
                                 {
-                                    //Debug.Log("-----------Found Stloc_S " + (i - 2));
                                     if(codes[i-3].opcode == OpCodes.Ldc_I4_1)
                                     {
-                                        //Debug.Log("-----------Found Ldc_I4_1, insertIndex is here" + (i - 3));
                                         if(codes[i-4].opcode == OpCodes.Ble) {
                                             insertIndex = i - 3;
                                             break;
@@ -196,7 +188,6 @@ namespace FastBeltsSortersBuild
                     {
                         codes[jumpDestinationIndex].labels.Add(jump);
                         codes.Insert(insertIndex, new CodeInstruction(OpCodes.Br, jump));
-                        //Debug.Log("Added label");
                     }
                     //debug log
                     //for(int i = 500; i < codes.Count; i++) Debug.Log("[" + i + "]: " + codes[i].ToString());
