@@ -70,6 +70,21 @@ namespace FastBeltsSortersBuild
                     }
                     if (insertIndex > -1 && continueLabelIndex > -1 && falseLabelIndex > -1)
                     {
+                        /*
+                            four lines i'm using. Deleting first 3, and changing with my own condition. 
+                            continueLabel is added to UseMouseLeft() method
+                            falseLabel is added to ldc.i4.0 in the end of method
+                        */
+                        /*
+                            IL_0000: call      valuetype VFInput/InputValue VFInput::get__buildConfirm()
+                            IL_0005: ldfld     bool VFInput/InputValue::onDown
+                            IL_000A: brfalse   IL_00C7
+                            IL_000F: call      void VFInput::UseMouseLeft()
+                            ...
+                            IL_00C7: ldc.i4.0
+                            IL_00C8: ret
+                        */
+
                         //target and delete the condition.
                         insertIndex -= 1;//before onDown field here is a line with method get__buildConfirm, i'm deleting that too
                         codes[continueLabelIndex].labels.Add(continueLabel);
