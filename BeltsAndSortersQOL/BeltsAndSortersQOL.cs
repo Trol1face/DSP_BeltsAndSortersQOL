@@ -20,6 +20,7 @@ namespace BeltsAndSortersQOL
         public static ConfigEntry<bool> disableBeltProlongation;
         public static ConfigEntry<bool> altitudeValueInCursorText;
         public static ConfigEntry<bool> shortVerOfAltitudeAndLength;
+        public static ConfigEntry<bool> autoTakeBeltsAltitude;
 
         private void Awake()
         {
@@ -32,10 +33,11 @@ namespace BeltsAndSortersQOL
             disableBeltProlongation = Config.Bind("General", "disableBeltProlongation", true,
                 "If set on TRUE ending belt on ground will not start another belt in the end of builded one. In vanilla if you build end a belt into nothing, end of the belt becomes a new start and you continue to build it or cancel with RMB. This feature disables that");
             altitudeValueInCursorText = Config.Bind("General", "AltitudeValueInCursorText", true,
-                "There will be a text representing current belt's altitude");
+                "There will be a text near cursor representing current belt's altitude (instead of tips about clicking to build)");
             shortVerOfAltitudeAndLength = Config.Bind("General", "ShortVerOfAltitudeAndLength", false,
                 "Enable this in addition to previous config to change form from *Altitude: n/Length: n* to short version *A: n| L: n");
-            
+            autoTakeBeltsAltitude = Config.Bind("General", "autoTakeBeltsAltitude", true,
+                "If you start a belt in another belt your current altitude will change to this belt's altitude automaticly");
             
             new Harmony(__GUID__).PatchAll(typeof(Patch));
         }
@@ -45,74 +47,69 @@ namespace BeltsAndSortersQOL
             [HarmonyTranspiler, HarmonyPatch(typeof(BuildTool_Path), "ConfirmOperation")]
             public static IEnumerable<CodeInstruction> BuildTool_Path_ConfirmOperation_Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator ilgen)
             {
-                if (holdReleaseBeltsBuilding.Value)
+                if (holdReleaseBeltsBuilding.Value || autoTakeBeltsAltitude.Value) 
                 {
-                    Label falseLabel = ilgen.DefineLabel();
-                    Label continueLabel = ilgen.DefineLabel();
-                    FieldInfo insertAnchor = typeof(VFInput.InputValue).GetField("onDown");
-                    MethodInfo continueLabelAnchor = typeof(VFInput).GetMethod("UseMouseLeft");
-                    bool foundInsertIndex = false;
-                    bool foundContinueLabelIndex = false;
-                    int insertIndex = -1;
-                    int continueLabelIndex = -1;//skip onUp && waitForConfirm if onDown is true
-                    int falseLabelIndex = -1; //jump here if condition is false, to the end of method
-                    // Grab all the instructions
-                    var codes = new List<CodeInstruction>(instructions);
-                    for(int i = 0; i < codes.Count; i++)
+                    CodeMatcher matcher = new(instructions);
+                    if (holdReleaseBeltsBuilding.Value)
                     {
-                        if(!foundInsertIndex && codes[i].opcode == OpCodes.Ldfld && codes[i].operand is FieldInfo f && f == insertAnchor)
-                        {
-                            //Debug.Log(" insertIndex Detected in this line: " + i);
-                            foundInsertIndex = true;// Skip this if if we found it once
-                            insertIndex = i;
-                        }
-                        if(!foundContinueLabelIndex && codes[i].opcode == OpCodes.Call && codes[i].operand is MethodInfo m && m == continueLabelAnchor){
-                            //Debug.Log(" continueLabelIndex Detected in this line: " + i);
-                            foundContinueLabelIndex = true;// Skip this if if we found it once
-                            continueLabelIndex = i;
-                        }
-                        if(codes[i].opcode == OpCodes.Ldc_I4_0) {
-                            //Debug.Log(" falseLabelIndex Detected in this line: " + i);
-                            falseLabelIndex = i;//Need the last of this opcodes
+                        Label falseLabel = ilgen.DefineLabel();//jump here if condition is false, to the end of method
+                        Label continueLabel = ilgen.DefineLabel();//skip onUp && waitForConfirm if onDown is true
+                        List<Label> falseLabelList = new();//matcher adds only IEnumerables of labels
+                        List<Label> continueLabelList = new();
+                        FieldInfo insertAnchor = typeof(VFInput.InputValue).GetField("onDown");
+                        falseLabelList.Add(falseLabel);
+                        continueLabelList.Add(continueLabel);
+                        /*
+                        find
+                            call      valuetype VFInput/InputValue VFInput::get__buildConfirm()
+                            ldfld     bool VFInput/InputValue::onDown
+                            brfalse   IL_00C7
+                            call      void VFInput::UseMouseLeft()
+                        */
+                        Debug.Log("....Matching for insert started. Matcher pos " + matcher.Pos);
+                        matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldfld && i.operand is FieldInfo f && f == insertAnchor));
+                        if (matcher.Pos != -1) {
+                            Debug.Log("....Searching onDown. Found " + matcher.Instruction.ToString());
+                            /*
+                                four lines i'm using. Deleting first 3, and changing with my own condition. 
+                                continueLabel is added to UseMouseLeft() method
+                                falseLabel is added to ldc.i4.0 in the end of method
+                            */
+                            
+
+                            //target and delete the condition.
+                            matcher.Advance(-1);//current pos is ldfld onDown, i'm deleting call before it too
+                            matcher.RemoveInstructions(3);
+                            //put our own condition
+                            matcher.InsertAndAdvance(
+                                new CodeInstruction(OpCodes.Call, typeof(VFInput).GetMethod("get__buildConfirm")),
+                                new CodeInstruction(OpCodes.Ldfld, typeof(VFInput.InputValue).GetField("onDown")),
+                                new CodeInstruction(OpCodes.Brtrue, continueLabel),
+                                new CodeInstruction(OpCodes.Call, typeof(VFInput).GetMethod("get__buildConfirm")),
+                                new CodeInstruction(OpCodes.Ldfld, typeof(VFInput.InputValue).GetField("onUp")),
+                                new CodeInstruction(OpCodes.Brfalse, falseLabel),
+                                new CodeInstruction(OpCodes.Ldarg_0),
+                                new CodeInstruction(OpCodes.Ldfld, typeof(BuildTool_Path).GetField("waitForConfirm")),
+                                new CodeInstruction(OpCodes.Brfalse, falseLabel)
+                            );
+                            matcher.AddLabels(continueLabelList);
+                            matcher.End();
+                            Debug.Log("END pos is" + matcher.Pos);
+                            /*
+                            find
+                                ...
+                                ldc.i4.0 <--   at the end of the method
+                                ret
+                            */
+                            matcher.MatchBack(true, new CodeMatch(i => i.opcode == OpCodes.Ldc_I4_0));
+                            Debug.Log("....Searching for LDC_I4_0. Found " + matcher.Instruction.ToString());
+                            matcher.AddLabels(falseLabelList);
+                            
+                            foreach (CodeInstruction ins in matcher.Instructions()) Debug.Log(".. " + ins.ToString());
+
                         }
                     }
-                    if (insertIndex > -1 && continueLabelIndex > -1 && falseLabelIndex > -1)
-                    {
-                        /*
-                            four lines i'm using. Deleting first 3, and changing with my own condition. 
-                            continueLabel is added to UseMouseLeft() method
-                            falseLabel is added to ldc.i4.0 in the end of method
-                        */
-                        /*
-                            IL_0000: call      valuetype VFInput/InputValue VFInput::get__buildConfirm()
-                            IL_0005: ldfld     bool VFInput/InputValue::onDown
-                            IL_000A: brfalse   IL_00C7
-                            IL_000F: call      void VFInput::UseMouseLeft()
-                            ...
-                            IL_00C7: ldc.i4.0
-                            IL_00C8: ret
-                        */
-
-                        //target and delete the condition.
-                        insertIndex -= 1;//before onDown field here is a line with method get__buildConfirm, i'm deleting that too
-                        codes[continueLabelIndex].labels.Add(continueLabel);
-                        codes[falseLabelIndex].labels.Add(falseLabel);
-                        codes.RemoveRange(insertIndex, 3);
-                        //put our own condition
-                        codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Call, typeof(VFInput).GetMethod("get__buildConfirm")));
-                        codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, typeof(VFInput.InputValue).GetField("onDown")));  
-                        codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Brtrue, continueLabel));
-                        codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Call, typeof(VFInput).GetMethod("get__buildConfirm")));
-                        codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, typeof(VFInput.InputValue).GetField("onUp")));  
-                        codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Brfalse, falseLabel));
-                        codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldarg_0));
-                        codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Ldfld, typeof(BuildTool_Path).GetField("waitForConfirm"))); 
-                        codes.Insert(insertIndex++, new CodeInstruction(OpCodes.Brfalse, falseLabel));
-                    }
-                    //debug log
-                    //for(int i = 0; i < codes.Count; i++) Debug.Log("[" + i + "]: " + codes[i].ToString());
-
-                    return codes.AsEnumerable();
+                    return matcher.InstructionEnumeration();
                 }
                 return instructions;
             }
@@ -153,11 +150,11 @@ namespace BeltsAndSortersQOL
                 if (disableBeltProlongation.Value)
                 {
                     Label jump = ilgen.DefineLabel();
-                    List<Label> labelList = new List<Label>();//matcher adds only IEnumerables of labels
-                    labelList.Add(jump);
-                    CodeInstruction jumpPoint = new CodeInstruction(OpCodes.Br, jump);
-                    CodeMatcher matcher = new CodeMatcher(instructions);
+                    List<Label> labelList = new();//matcher adds only IEnumerables of labels
+                    CodeInstruction jumpPoint = new(OpCodes.Br, jump);
+                    CodeMatcher matcher = new(instructions);
                     MethodInfo anchor = typeof(BuildTool).GetMethod("get_buildPreviews");
+                    labelList.Add(jump);
                     /*
                     find
                     ..ldarg.0
@@ -211,7 +208,7 @@ namespace BeltsAndSortersQOL
             {
                 if(altitudeValueInCursorText.Value) 
                 {
-                    CodeMatcher matcher = new CodeMatcher(instructions);
+                    CodeMatcher matcher = new(instructions);
                     MethodInfo rep = typeof(BeltsAndSortersQOL).GetMethod("CursorText_DeterminePreviews");
                     MethodInfo repShort = typeof(BeltsAndSortersQOL).GetMethod("ShortCursorText_DeterminePreviews");
                     matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldstr && (String)i.operand == "选择起始位置"));
@@ -237,10 +234,10 @@ namespace BeltsAndSortersQOL
             {
                 if(altitudeValueInCursorText.Value) 
                 {
-                    CodeMatcher matcher = new CodeMatcher(instructions);
-                    matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldstr && (String)i.operand == "点击鼠标建造"));
+                    CodeMatcher matcher = new(instructions);
                     MethodInfo rep = typeof(BeltsAndSortersQOL).GetMethod("CursorText_CheckBuildConditions");
                     MethodInfo repShort = typeof(BeltsAndSortersQOL).GetMethod("ShortCursorText_CheckBuildConditions");
+                    matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldstr && (String)i.operand == "点击鼠标建造"));
                     if (matcher.Pos != -1) 
                     {
                         matcher.RemoveInstructions(8);
@@ -258,6 +255,10 @@ namespace BeltsAndSortersQOL
             }
 
         }
+
+        
+
+
         public static String CursorText_DeterminePreviews() {
             BuildTool_Path tool = GameMain.mainPlayer.controller.actionBuild.pathTool;
             String altitude = tool.altitude.ToString();
