@@ -21,6 +21,7 @@ namespace FastBeltsSortersBuild
         public static ConfigEntry<bool> holdReleaseSortersBuilding;
         public static ConfigEntry<bool> disableBeltProlongation;
         public static ConfigEntry<bool> AltitudeValueInCursorText;
+        public static ConfigEntry<bool> ShortVerOfAltitudeAndLength;
 
         private void Awake()
         {
@@ -34,6 +35,8 @@ namespace FastBeltsSortersBuild
                 "If set on TRUE ending belt on ground will not start another belt in the end of builded one. In vanilla if you build end a belt into nothing, end of the belt becomes a new start and you continue to build it or cancel with RMB. This feature disables that");
             AltitudeValueInCursorText = Config.Bind("General", "AltitudeValueInCursorText", true,
                 "There will be a text representing current belt's altitude");
+            ShortVerOfAltitudeAndLength = Config.Bind("General", "ShortVerOfAltitudeAndLength", false,
+                "Enable this in addition to previous config to change form from *Altitude: n/Length: n* to short version *A: n| L: n");
             
             
             new Harmony(__GUID__).PatchAll(typeof(Patch));
@@ -212,14 +215,19 @@ namespace FastBeltsSortersBuild
                 if(AltitudeValueInCursorText.Value) 
                 {
                     CodeMatcher matcher = new CodeMatcher(instructions);
-                    MethodInfo rep = typeof(FastBeltsSortersBuild).GetMethod("AltitudeInCursorText");
+                    MethodInfo rep = typeof(FastBeltsSortersBuild).GetMethod("CursorText_DeterminePreviews");
+                    MethodInfo repShort = typeof(FastBeltsSortersBuild).GetMethod("ShortCursorText_DeterminePreviews");
                     matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldstr && (String)i.operand == "选择起始位置"));
                     //Log to see what we found
                     //foreach (CodeInstruction ins in matcher.InstructionsInRange(matcher.Pos - 1, matcher.Pos + 10)) Debug.Log("........... " + ins.ToString());
                     if (matcher.Pos != -1) 
                     {
                         matcher.RemoveInstructions(2);
-                        matcher.Insert(new CodeInstruction(OpCodes.Call, rep));
+                        if (ShortVerOfAltitudeAndLength.Value) {
+                            matcher.Insert(new CodeInstruction(OpCodes.Call, repShort));
+                        } else {
+                            matcher.Insert(new CodeInstruction(OpCodes.Call, rep));
+                        }
                         //Log to see what we changed
                         //foreach (CodeInstruction ins in matcher.InstructionsInRange(matcher.Pos - 3, matcher.Pos + 10)) Debug.Log("........... " + ins.ToString());
                     }
@@ -236,13 +244,18 @@ namespace FastBeltsSortersBuild
                 {
                     CodeMatcher matcher = new CodeMatcher(instructions);
                     matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldstr && (String)i.operand == "点击鼠标建造"));
-                    MethodInfo rep = typeof(FastBeltsSortersBuild).GetMethod("AltitudeAndLengthInCursorText");
+                    MethodInfo rep = typeof(FastBeltsSortersBuild).GetMethod("CursorText_CheckBuildConditions");
+                    MethodInfo repShort = typeof(FastBeltsSortersBuild).GetMethod("ShortCursorText_CheckBuildConditions");
                     //Log to see what we found
                     //foreach (CodeInstruction ins in matcher.InstructionsInRange(matcher.Pos - 1, matcher.Pos + 10)) Debug.Log("........... " + ins.ToString());
                     if (matcher.Pos != -1) 
                     {
                         matcher.RemoveInstructions(8);
-                        matcher.Insert(new CodeInstruction(OpCodes.Call, rep));
+                        if (ShortVerOfAltitudeAndLength.Value) {
+                            matcher.Insert(new CodeInstruction(OpCodes.Call, repShort));
+                        } else {
+                            matcher.Insert(new CodeInstruction(OpCodes.Call, rep));
+                        }
                         //Log to see what we changed
                         //foreach (CodeInstruction ins in matcher.InstructionsInRange(matcher.Pos - 3, matcher.Pos + 10)) Debug.Log("........... " + ins.ToString());
                     }
@@ -252,16 +265,27 @@ namespace FastBeltsSortersBuild
             }
 
         }
-        public static String AltitudeInCursorText() {
+        public static String CursorText_DeterminePreviews() {
             BuildTool_Path tool = GameMain.mainPlayer.controller.actionBuild.pathTool;
             String altitude = tool.altitude.ToString();
-            return "Altitude: " + altitude;
+            return "Altitude: " + altitude + System.Environment.NewLine + "Length: 0";
             }
-        public static String AltitudeAndLengthInCursorText() {
+        public static String ShortCursorText_DeterminePreviews() {
+            BuildTool_Path tool = GameMain.mainPlayer.controller.actionBuild.pathTool;
+            String altitude = tool.altitude.ToString();
+            return "A: " + altitude + " | L: 0";
+            }
+        public static String CursorText_CheckBuildConditions() {
             BuildTool_Path tool = GameMain.mainPlayer.controller.actionBuild.pathTool;
             String altitude = tool.altitude.ToString();
             String length = tool.pathPointCount.ToString();
             return "Altitude: " + altitude + System.Environment.NewLine + "Length: " + length;
+        }
+        public static String ShortCursorText_CheckBuildConditions() {
+            BuildTool_Path tool = GameMain.mainPlayer.controller.actionBuild.pathTool;
+            String altitude = tool.altitude.ToString();
+            String length = tool.pathPointCount.ToString();
+            return "A: " + altitude + " | L: " + length;
         }
 
 
