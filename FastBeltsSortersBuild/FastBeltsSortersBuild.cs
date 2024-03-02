@@ -9,6 +9,7 @@ using System.Linq;
 using UnityEngine;
 using System;
 using System.CodeDom;
+using System.Text.RegularExpressions;
 
 namespace FastBeltsSortersBuild
 {
@@ -133,7 +134,7 @@ namespace FastBeltsSortersBuild
                     {
                         if(codes[i].opcode == OpCodes.Ldfld && codes[i].operand is FieldInfo o && o == anchor)
                         {
-                        //Debug.Log(" insertIndex etected in this line: " + i);
+                        //Debug.Log(" insertIndex detected in this line: " + i);
                             insertIndex = i;
                             break;
 
@@ -155,55 +156,54 @@ namespace FastBeltsSortersBuild
                 if (disableBeltProlongation.Value)
                 {
                     Label jump = ilgen.DefineLabel();
+                    List<Label> labelList = new List<Label>();//matcher adds only IEnumerables of labels
+                    labelList.Add(jump);
+                    CodeInstruction jumpPoint = new CodeInstruction(OpCodes.Br, jump);
+                    CodeMatcher matcher = new CodeMatcher(instructions);
                     MethodInfo anchor = typeof(BuildTool).GetMethod("get_buildPreviews");
-                    bool jumpDestinationIndexFound = false;
-                    int insertIndex = -1;
-                    int jumpDestinationIndex = -1;
-                    //Grab all the instructions
-                    var codes = new List<CodeInstruction>(instructions);
-                    for(int i = codes.Count-1; i >= 5; i--)
+                    /*
+                    find
+                    ..ldarg.0
+                    ..ldarg.0
+                    ..call instance class [netstandard]System.Collections.Generic.List`1<class BuildPreview> BuildTool::get_buildPreviews()
+                    ..call instance void BuildTool_Path::AddUpBuildingPathLength(class [netstandard]System.Collections.Generic.List`1<class BuildPreview>)
+                    */
+                    matcher.MatchForward(false,
+                        new CodeMatch(i => i.opcode == OpCodes.Ldarg_0),
+                        new CodeMatch(i => i.opcode == OpCodes.Ldarg_0),
+                        new CodeMatch(i => i.opcode == OpCodes.Call && i.operand is MethodInfo m && m == anchor),
+                        new CodeMatch(i => i.opcode == OpCodes.Call)
+                    );
+                    if (matcher.Pos != -1) 
                     {
+                        //Debug.Log("...Found destination point here " + matcher.Pos);
+                        matcher.AddLabels(labelList);
+                        matcher.Start();
                         /*
-                        A lot of IFs to be sure that label will be placed in the right spot
+                        find
+                        ..ble       IL_07BF
+                            WILL ADD JUMP HERE
+                        ..ldc.i4.1
+                        ..stloc.s   V_32
+                        ..ldarg.0
+                        ..call instance class [netstandard]System.Collections.Generic.List`1<class BuildPreview> BuildTool::get_buildPreviews()
                         */
-                        if(!jumpDestinationIndexFound) {
-                            if(codes[i].opcode == OpCodes.Call){
-                                if(codes[i-1].opcode == OpCodes.Call && codes[i-1].operand is MethodInfo m1 && m1 == anchor){
-                                    if(codes[i-2].opcode == OpCodes.Ldarg_0 && codes[i-3].opcode == OpCodes.Ldarg_0) {
-                                        jumpDestinationIndexFound = true;
-                                        jumpDestinationIndex = i - 3;
-                                    }
-                                }
-                            }
-                        }
-                        /*
-                        A lot of IFs to be sure that Br opcode (jump) will be placed in the right spot
-                        */
-                        if(codes[i].opcode == OpCodes.Call && codes[i].operand is MethodInfo m2 && m2 == anchor)
-                        {
-                            if(codes[i-1].opcode == OpCodes.Ldarg_0)
-                            {
-                                if(codes[i-2].opcode == OpCodes.Stloc_S)
-                                {
-                                    if(codes[i-3].opcode == OpCodes.Ldc_I4_1)
-                                    {
-                                        if(codes[i-4].opcode == OpCodes.Ble) {
-                                            insertIndex = i - 3;
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
+                        matcher.MatchForward(false,
+                        new CodeMatch(i => i.opcode == OpCodes.Ble),// only for matcher, jump point is the next one
+                        new CodeMatch(i => i.opcode == OpCodes.Ldc_I4_1),//need to place jump before this instruction
+                        new CodeMatch(i => i.opcode == OpCodes.Stloc_S),
+                        new CodeMatch(i => i.opcode == OpCodes.Ldarg_0),
+                        new CodeMatch(i => i.opcode == OpCodes.Call  && i.operand is MethodInfo m && m == anchor)
+                        );
+                        if (matcher.Pos != 0) {
+                            //Debug.Log("...Found jump point here " + matcher.Pos + 1);
+                            matcher.Advance(1);//moving from Ble
+                            matcher.Insert(jumpPoint);
+                            //Debug.Log("..Inserted jump " + jumpPoint.ToString());
+                            //foreach (CodeInstruction ins in matcher.Instructions()) Debug.Log(".. " + ins.ToString());
+                            return matcher.InstructionEnumeration();
                         }
                     }
-                    if (insertIndex > -1 && jumpDestinationIndex > -1)
-                    {
-                        codes[jumpDestinationIndex].labels.Add(jump);
-                        codes.Insert(insertIndex, new CodeInstruction(OpCodes.Br, jump));
-                    }
-                    //debug log
-                    //for(int i = 500; i < codes.Count; i++) Debug.Log("[" + i + "]: " + codes[i].ToString());
-                    return codes.AsEnumerable();
                 }
                 return instructions;
             }
@@ -218,8 +218,6 @@ namespace FastBeltsSortersBuild
                     MethodInfo rep = typeof(FastBeltsSortersBuild).GetMethod("CursorText_DeterminePreviews");
                     MethodInfo repShort = typeof(FastBeltsSortersBuild).GetMethod("ShortCursorText_DeterminePreviews");
                     matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldstr && (String)i.operand == "选择起始位置"));
-                    //Log to see what we found
-                    //foreach (CodeInstruction ins in matcher.InstructionsInRange(matcher.Pos - 1, matcher.Pos + 10)) Debug.Log("........... " + ins.ToString());
                     if (matcher.Pos != -1) 
                     {
                         matcher.RemoveInstructions(2);
@@ -246,8 +244,6 @@ namespace FastBeltsSortersBuild
                     matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldstr && (String)i.operand == "点击鼠标建造"));
                     MethodInfo rep = typeof(FastBeltsSortersBuild).GetMethod("CursorText_CheckBuildConditions");
                     MethodInfo repShort = typeof(FastBeltsSortersBuild).GetMethod("ShortCursorText_CheckBuildConditions");
-                    //Log to see what we found
-                    //foreach (CodeInstruction ins in matcher.InstructionsInRange(matcher.Pos - 1, matcher.Pos + 10)) Debug.Log("........... " + ins.ToString());
                     if (matcher.Pos != -1) 
                     {
                         matcher.RemoveInstructions(8);
@@ -287,7 +283,6 @@ namespace FastBeltsSortersBuild
             String length = tool.pathPointCount.ToString();
             return "A: " + altitude + " | L: " + length;
         }
-
 
     }
 }
