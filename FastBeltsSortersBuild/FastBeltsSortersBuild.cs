@@ -1,10 +1,14 @@
 ﻿using BepInEx;
 using BepInEx.Configuration;
+using BepInEx.Logging;
 using HarmonyLib;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
+using System;
+using System.CodeDom;
 
 namespace FastBeltsSortersBuild
 {
@@ -13,20 +17,25 @@ namespace FastBeltsSortersBuild
     {
         public const string __NAME__ = "FastBeltsSortersBuild";
         public const string __GUID__ = "com.Trol1face.dsp." + __NAME__;
-        public static ConfigEntry<bool> enableForBelts;
-        public static ConfigEntry<bool> enableForSorters;
+        public static ConfigEntry<bool> holdReleaseBeltsBuilding;
+        public static ConfigEntry<bool> holdReleaseSortersBuilding;
         public static ConfigEntry<bool> disableBeltProlongation;
+        public static ConfigEntry<bool> AltitudeValueInCursorText;
 
         private void Awake()
         {
             // Plugin startup logic
             //Logger.LogInfo($"Plugin {__GUID__} is loaded!");
-            enableForBelts = Config.Bind("General", "enableForBelts", true,
+            holdReleaseBeltsBuilding = Config.Bind("General", "holdReleaseBeltsBuilding", true,
                 "Enable 1 click building for Belts");
-            enableForSorters = Config.Bind("General", "enableForSorters", true,
+            holdReleaseSortersBuilding = Config.Bind("General", "holdReleaseSortersBuilding", true,
                 "Enable 1 click building for Sorters");
             disableBeltProlongation = Config.Bind("General", "disableBeltProlongation", true,
                 "If set on TRUE ending belt on ground will not start another belt in the end of builded one. In vanilla if you build end a belt into nothing, end of the belt becomes a new start and you continue to build it or cancel with RMB. This feature disables that");
+            AltitudeValueInCursorText = Config.Bind("General", "AltitudeValueInCursorText", true,
+                "There will be a text representing current belt's altitude");
+            
+            
             new Harmony(__GUID__).PatchAll(typeof(Patch));
         }
 
@@ -35,7 +44,7 @@ namespace FastBeltsSortersBuild
             [HarmonyTranspiler, HarmonyPatch(typeof(BuildTool_Path), "ConfirmOperation")]
             public static IEnumerable<CodeInstruction> BuildTool_Path_ConfirmOperation_Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator ilgen)
             {
-                if (enableForBelts.Value)
+                if (holdReleaseBeltsBuilding.Value)
                 {
                     Label falseLabel = ilgen.DefineLabel();
                     Label continueLabel = ilgen.DefineLabel();
@@ -110,7 +119,7 @@ namespace FastBeltsSortersBuild
             [HarmonyTranspiler, HarmonyPatch(typeof(BuildTool_Inserter), "ConfirmOperation")]
             public static IEnumerable<CodeInstruction> BuildTool_Inserter_ConfirmOperation_Transpiler(IEnumerable<CodeInstruction> instructions)
             {
-                if (enableForSorters.Value)
+                if (holdReleaseSortersBuilding.Value)
                 {
                     FieldInfo anchor = typeof(VFInput.InputValue).GetField("onDown");
                     FieldInfo rep = typeof(VFInput.InputValue).GetField("onUp");
@@ -195,6 +204,64 @@ namespace FastBeltsSortersBuild
                 }
                 return instructions;
             }
+
+            //Adding altitude value to cursor text when building you take belt in hands
+            [HarmonyTranspiler, HarmonyPatch(typeof(BuildTool_Path), "DeterminePreviews")]
+            public static object BuildTool_Path_DeterminePreviews_Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator ilgen)
+            {
+                if(AltitudeValueInCursorText.Value) 
+                {
+                    CodeMatcher matcher = new CodeMatcher(instructions);
+                    MethodInfo rep = typeof(FastBeltsSortersBuild).GetMethod("AltitudeInCursorText");
+                    matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldstr && (String)i.operand == "选择起始位置"));
+                    //Log to see what we found
+                    //foreach (CodeInstruction ins in matcher.InstructionsInRange(matcher.Pos - 1, matcher.Pos + 10)) Debug.Log("........... " + ins.ToString());
+                    if (matcher.Pos != -1) 
+                    {
+                        matcher.RemoveInstructions(2);
+                        matcher.Insert(new CodeInstruction(OpCodes.Call, rep));
+                        //Log to see what we changed
+                        //foreach (CodeInstruction ins in matcher.InstructionsInRange(matcher.Pos - 3, matcher.Pos + 10)) Debug.Log("........... " + ins.ToString());
+                    }
+                    return matcher.InstructionEnumeration();
+                }
+                return instructions;
+            }
+            
+            //Adding altitude value & length of the belt to cursor text when you started belt building
+            [HarmonyTranspiler, HarmonyPatch(typeof(BuildTool_Path), "CheckBuildConditions")]
+            public static object BuildTool_Path_CheckBuildConditions_Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator ilgen)
+            {
+                if(AltitudeValueInCursorText.Value) 
+                {
+                    CodeMatcher matcher = new CodeMatcher(instructions);
+                    matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldstr && (String)i.operand == "点击鼠标建造"));
+                    MethodInfo rep = typeof(FastBeltsSortersBuild).GetMethod("AltitudeAndLengthInCursorText");
+                    //Log to see what we found
+                    //foreach (CodeInstruction ins in matcher.InstructionsInRange(matcher.Pos - 1, matcher.Pos + 10)) Debug.Log("........... " + ins.ToString());
+                    if (matcher.Pos != -1) 
+                    {
+                        matcher.RemoveInstructions(8);
+                        matcher.Insert(new CodeInstruction(OpCodes.Call, rep));
+                        //Log to see what we changed
+                        //foreach (CodeInstruction ins in matcher.InstructionsInRange(matcher.Pos - 3, matcher.Pos + 10)) Debug.Log("........... " + ins.ToString());
+                    }
+                    return matcher.InstructionEnumeration();
+                }
+                return instructions;
+            }
+
+        }
+        public static String AltitudeInCursorText() {
+            BuildTool_Path tool = GameMain.mainPlayer.controller.actionBuild.pathTool;
+            String altitude = tool.altitude.ToString();
+            return "Altitude: " + altitude;
+            }
+        public static String AltitudeAndLengthInCursorText() {
+            BuildTool_Path tool = GameMain.mainPlayer.controller.actionBuild.pathTool;
+            String altitude = tool.altitude.ToString();
+            String length = tool.pathPointCount.ToString();
+            return "Altitude: " + altitude + System.Environment.NewLine + "Length: " + length;
         }
 
 
