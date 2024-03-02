@@ -112,33 +112,31 @@ namespace BeltsAndSortersQOL
                     }
                     if (autoTakeBeltsAltitude.Value) 
                     {
-                        Debug.Log("IT STARTED TO WORK");
                         MethodInfo anchor = typeof(BuildTool).GetMethod("GetObjectPose");
-                        MethodInfo rep = typeof(BeltsAndSortersQOL).GetMethod("TakeOnCursorObjectAltitude");
+                        //This method finds an altitude of belt that was clicked on
+                        MethodInfo rep = typeof(BeltsAndSortersQOL).GetMethod("TakeOnCursorBeltAltitude");
                         FieldInfo altitude = typeof(BuildTool_Path).GetField("altitude");
                         matcher.Start();
-                        Debug.Log("CODEMATCHER IS STARTED TO SEARCH FOR MATCH, MATCHER POS " + matcher.Pos);
+                        /*
+                        find
+                            call      instance valuetype [UnityEngine.CoreModule]UnityEngine.Pose BuildTool::GetObjectPose(int32)
+                            ldfld     valuetype [UnityEngine.CoreModule]UnityEngine.Vector3 [UnityEngine.CoreModule]UnityEngine.Pose::position
+                            stfld     valuetype [UnityEngine.CoreModule]UnityEngine.Vector3 BuildTool_Path::startTarget
+                            br.s      IL_007D <-- insert before this
+                        */
                         matcher.MatchForward(true, 
                             new CodeMatch(i => i.opcode == OpCodes.Call && i.operand is MethodInfo m && m == anchor),
                             new CodeMatch(i => i.opcode == OpCodes.Ldfld),
                             new CodeMatch(i => i.opcode == OpCodes.Stfld),
                             new CodeMatch(i => i.opcode == OpCodes.Br)
                         );
-                        int i = 0;
-                        
-                        //Debug.Log("CODEMATCHER IS STOPPED, MATCHER POS IS " + matcher.Pos + " COUNT OF CODES IS "+matcher.Instructions().Count());
                         if (matcher.Pos != 0) {
-                            Debug.Log("Found match " + matcher.Instruction.ToString());
                             matcher.InsertAndAdvance(
                                 new CodeInstruction(OpCodes.Ldarg_0),
                                 new CodeInstruction(OpCodes.Call, rep),
                                 new CodeInstruction(OpCodes.Stfld, altitude)
                             );
-                            foreach (CodeInstruction ins in matcher.Instructions()) 
-                            {
-                                Debug.Log(".. " + i++ + ".." + ins.ToString());
-                            }
-                            
+                            //foreach (CodeInstruction ins in matcher.Instructions()) Debug.Log(".. " + ins.ToString());
                         }
                     }
                     return matcher.InstructionEnumeration();
@@ -301,7 +299,7 @@ namespace BeltsAndSortersQOL
             return (int)Math.Round(distance / PlanetGrid.kAltGrid);
         }
 
-        public static int TakeOnCursorObjectAltitude() {
+        public static int TakeOnCursorBeltAltitude() {
             BuildTool_Path tool = GameMain.mainPlayer.controller.actionBuild.pathTool;
             int result = tool.altitude;
             if (tool.ObjectIsBelt(tool.castObjectId))
