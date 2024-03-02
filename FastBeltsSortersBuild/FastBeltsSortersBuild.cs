@@ -1,6 +1,5 @@
 ﻿using BepInEx;
 using BepInEx.Configuration;
-using BepInEx.Logging;
 using HarmonyLib;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -8,8 +7,6 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using System;
-using System.CodeDom;
-using System.Text.RegularExpressions;
 
 namespace FastBeltsSortersBuild
 {
