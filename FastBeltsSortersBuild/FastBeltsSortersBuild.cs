@@ -18,8 +18,8 @@ namespace FastBeltsSortersBuild
         public static ConfigEntry<bool> holdReleaseBeltsBuilding;
         public static ConfigEntry<bool> holdReleaseSortersBuilding;
         public static ConfigEntry<bool> disableBeltProlongation;
-        public static ConfigEntry<bool> AltitudeValueInCursorText;
-        public static ConfigEntry<bool> ShortVerOfAltitudeAndLength;
+        public static ConfigEntry<bool> altitudeValueInCursorText;
+        public static ConfigEntry<bool> shortVerOfAltitudeAndLength;
 
         private void Awake()
         {
@@ -31,9 +31,9 @@ namespace FastBeltsSortersBuild
                 "Enable 1 click building for Sorters");
             disableBeltProlongation = Config.Bind("General", "disableBeltProlongation", true,
                 "If set on TRUE ending belt on ground will not start another belt in the end of builded one. In vanilla if you build end a belt into nothing, end of the belt becomes a new start and you continue to build it or cancel with RMB. This feature disables that");
-            AltitudeValueInCursorText = Config.Bind("General", "AltitudeValueInCursorText", true,
+            altitudeValueInCursorText = Config.Bind("General", "AltitudeValueInCursorText", true,
                 "There will be a text representing current belt's altitude");
-            ShortVerOfAltitudeAndLength = Config.Bind("General", "ShortVerOfAltitudeAndLength", false,
+            shortVerOfAltitudeAndLength = Config.Bind("General", "ShortVerOfAltitudeAndLength", false,
                 "Enable this in addition to previous config to change form from *Altitude: n/Length: n* to short version *A: n| L: n");
             
             
@@ -209,7 +209,7 @@ namespace FastBeltsSortersBuild
             [HarmonyTranspiler, HarmonyPatch(typeof(BuildTool_Path), "DeterminePreviews")]
             public static object BuildTool_Path_DeterminePreviews_Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator ilgen)
             {
-                if(AltitudeValueInCursorText.Value) 
+                if(altitudeValueInCursorText.Value) 
                 {
                     CodeMatcher matcher = new CodeMatcher(instructions);
                     MethodInfo rep = typeof(FastBeltsSortersBuild).GetMethod("CursorText_DeterminePreviews");
@@ -218,7 +218,7 @@ namespace FastBeltsSortersBuild
                     if (matcher.Pos != -1) 
                     {
                         matcher.RemoveInstructions(2);
-                        if (ShortVerOfAltitudeAndLength.Value) {
+                        if (shortVerOfAltitudeAndLength.Value) {
                             matcher.Insert(new CodeInstruction(OpCodes.Call, repShort));
                         } else {
                             matcher.Insert(new CodeInstruction(OpCodes.Call, rep));
@@ -235,7 +235,7 @@ namespace FastBeltsSortersBuild
             [HarmonyTranspiler, HarmonyPatch(typeof(BuildTool_Path), "CheckBuildConditions")]
             public static object BuildTool_Path_CheckBuildConditions_Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator ilgen)
             {
-                if(AltitudeValueInCursorText.Value) 
+                if(altitudeValueInCursorText.Value) 
                 {
                     CodeMatcher matcher = new CodeMatcher(instructions);
                     matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldstr && (String)i.operand == "点击鼠标建造"));
@@ -244,7 +244,7 @@ namespace FastBeltsSortersBuild
                     if (matcher.Pos != -1) 
                     {
                         matcher.RemoveInstructions(8);
-                        if (ShortVerOfAltitudeAndLength.Value) {
+                        if (shortVerOfAltitudeAndLength.Value) {
                             matcher.Insert(new CodeInstruction(OpCodes.Call, repShort));
                         } else {
                             matcher.Insert(new CodeInstruction(OpCodes.Call, rep));
