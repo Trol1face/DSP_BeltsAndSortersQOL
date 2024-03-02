@@ -49,7 +49,7 @@ namespace BeltsAndSortersQOL
             {
                 if (holdReleaseBeltsBuilding.Value || autoTakeBeltsAltitude.Value) 
                 {
-                    CodeMatcher matcher = new(instructions);
+                    CodeMatcher matcher = new(instructions);           
                     if (holdReleaseBeltsBuilding.Value)
                     {
                         Label falseLabel = ilgen.DefineLabel();//jump here if condition is false, to the end of method
@@ -66,10 +66,11 @@ namespace BeltsAndSortersQOL
                             brfalse   IL_00C7
                             call      void VFInput::UseMouseLeft()
                         */
-                        Debug.Log("....Matching for insert started. Matcher pos " + matcher.Pos);
+                        //Debug.Log("....Matching for insert started. Matcher pos " + matcher.Pos);
+                        matcher.Start();
                         matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldfld && i.operand is FieldInfo f && f == insertAnchor));
-                        if (matcher.Pos != -1) {
-                            Debug.Log("....Searching onDown. Found " + matcher.Instruction.ToString());
+                        if (matcher.Pos != 0) {
+                            //Debug.Log("....Searching onDown. Found " + matcher.Instruction.ToString());
                             /*
                                 four lines i'm using. Deleting first 3, and changing with my own condition. 
                                 continueLabel is added to UseMouseLeft() method
@@ -94,7 +95,7 @@ namespace BeltsAndSortersQOL
                             );
                             matcher.AddLabels(continueLabelList);
                             matcher.End();
-                            Debug.Log("END pos is" + matcher.Pos);
+                            //Debug.Log("END pos is" + matcher.Pos);
                             /*
                             find
                                 ...
@@ -102,11 +103,42 @@ namespace BeltsAndSortersQOL
                                 ret
                             */
                             matcher.MatchBack(true, new CodeMatch(i => i.opcode == OpCodes.Ldc_I4_0));
-                            Debug.Log("....Searching for LDC_I4_0. Found " + matcher.Instruction.ToString());
+                            //Debug.Log("....Searching for LDC_I4_0. Found " + matcher.Instruction.ToString());
                             matcher.AddLabels(falseLabelList);
                             
-                            foreach (CodeInstruction ins in matcher.Instructions()) Debug.Log(".. " + ins.ToString());
+                            //foreach (CodeInstruction ins in matcher.Instructions()) Debug.Log(".. " + ins.ToString());
 
+                        }
+                    }
+                    if (autoTakeBeltsAltitude.Value) 
+                    {
+                        Debug.Log("IT STARTED TO WORK");
+                        MethodInfo anchor = typeof(BuildTool).GetMethod("GetObjectPose");
+                        MethodInfo rep = typeof(BeltsAndSortersQOL).GetMethod("TakeOnCursorObjectAltitude");
+                        FieldInfo altitude = typeof(BuildTool_Path).GetField("altitude");
+                        matcher.Start();
+                        Debug.Log("CODEMATCHER IS STARTED TO SEARCH FOR MATCH, MATCHER POS " + matcher.Pos);
+                        matcher.MatchForward(true, 
+                            new CodeMatch(i => i.opcode == OpCodes.Call && i.operand is MethodInfo m && m == anchor),
+                            new CodeMatch(i => i.opcode == OpCodes.Ldfld),
+                            new CodeMatch(i => i.opcode == OpCodes.Stfld),
+                            new CodeMatch(i => i.opcode == OpCodes.Br)
+                        );
+                        int i = 0;
+                        
+                        //Debug.Log("CODEMATCHER IS STOPPED, MATCHER POS IS " + matcher.Pos + " COUNT OF CODES IS "+matcher.Instructions().Count());
+                        if (matcher.Pos != 0) {
+                            Debug.Log("Found match " + matcher.Instruction.ToString());
+                            matcher.InsertAndAdvance(
+                                new CodeInstruction(OpCodes.Ldarg_0),
+                                new CodeInstruction(OpCodes.Call, rep),
+                                new CodeInstruction(OpCodes.Stfld, altitude)
+                            );
+                            foreach (CodeInstruction ins in matcher.Instructions()) 
+                            {
+                                Debug.Log(".. " + i++ + ".." + ins.ToString());
+                            }
+                            
                         }
                     }
                     return matcher.InstructionEnumeration();
@@ -256,19 +288,38 @@ namespace BeltsAndSortersQOL
 
         }
 
-        
+        public static int ObjectAltitude(Vector3 pos)
+        {
+            PlanetAuxData aux = GameMain.mainPlayer.controller.actionBuild.planetAux;
+            if (aux == null)
+            {
+                return 0;
+            }
+            //Snapの第2引数をtrueにすると地面にスナップする
+            Vector3 ground = aux.Snap(pos, true);
+            float distance = Vector3.Distance(pos, ground);
+            return (int)Math.Round(distance / PlanetGrid.kAltGrid);
+        }
 
-
+        public static int TakeOnCursorObjectAltitude() {
+            BuildTool_Path tool = GameMain.mainPlayer.controller.actionBuild.pathTool;
+            int result = tool.altitude;
+            if (tool.ObjectIsBelt(tool.castObjectId))
+            {
+                result = ObjectAltitude(tool.castObjectPos);
+            }
+            return result;
+        }
         public static String CursorText_DeterminePreviews() {
             BuildTool_Path tool = GameMain.mainPlayer.controller.actionBuild.pathTool;
             String altitude = tool.altitude.ToString();
             return "Altitude: " + altitude + System.Environment.NewLine + "Length: 0";
-            }
+        }
         public static String ShortCursorText_DeterminePreviews() {
             BuildTool_Path tool = GameMain.mainPlayer.controller.actionBuild.pathTool;
             String altitude = tool.altitude.ToString();
             return "A: " + altitude + " | L: 0";
-            }
+        }
         public static String CursorText_CheckBuildConditions() {
             BuildTool_Path tool = GameMain.mainPlayer.controller.actionBuild.pathTool;
             String altitude = tool.altitude.ToString();
