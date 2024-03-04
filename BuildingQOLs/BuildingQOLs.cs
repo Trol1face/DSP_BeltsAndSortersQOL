@@ -8,12 +8,12 @@ using System.Linq;
 using UnityEngine;
 using System;
 
-namespace BeltsAndSortersQOL
+namespace BuildingQOLs
 {
     [BepInPlugin(__GUID__, __NAME__, "1.0.0")]
-    public class BeltsAndSortersQOL : BaseUnityPlugin
+    public class BuildingQOLs : BaseUnityPlugin
     {
-        public const string __NAME__ = "BeltsAndSortersQOL";
+        public const string __NAME__ = "BuildingQOLs";
         public const string __GUID__ = "com.Trol1face.dsp." + __NAME__;
         public static ConfigEntry<bool> holdReleaseBeltsBuilding;
         public static ConfigEntry<bool> holdReleaseSortersBuilding;
@@ -118,7 +118,7 @@ namespace BeltsAndSortersQOL
                     {
                         MethodInfo anchor = typeof(BuildTool).GetMethod("GetObjectPose");
                         //This method finds an altitude of belt that was clicked on
-                        MethodInfo rep = typeof(BeltsAndSortersQOL).GetMethod("TakeOnCursorBeltAltitude");
+                        MethodInfo rep = typeof(BuildingQOLs).GetMethod("TakeOnCursorBeltAltitude");
                         FieldInfo altitude = typeof(BuildTool_Path).GetField("altitude");
                         matcher.Start();
                         /*
@@ -243,7 +243,7 @@ namespace BeltsAndSortersQOL
                 if(altitudeValueInCursorText.Value) 
                 {
                     CodeMatcher matcher = new(instructions);
-                    MethodInfo rep = typeof(BeltsAndSortersQOL).GetMethod("CursorText_DeterminePreviews");
+                    MethodInfo rep = typeof(BuildingQOLs).GetMethod("CursorText_DeterminePreviews");
                     matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldstr && (String)i.operand == "选择起始位置"));
                     if (matcher.Pos != -1) 
                     {
@@ -264,7 +264,7 @@ namespace BeltsAndSortersQOL
                 if(altitudeValueInCursorText.Value) 
                 {
                     CodeMatcher matcher = new(instructions);
-                    MethodInfo rep = typeof(BeltsAndSortersQOL).GetMethod("CursorText_CheckBuildConditions");
+                    MethodInfo rep = typeof(BuildingQOLs).GetMethod("CursorText_CheckBuildConditions");
                     matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldstr && (String)i.operand == "点击鼠标建造"));
                     if (matcher.Pos != -1) 
                     {
