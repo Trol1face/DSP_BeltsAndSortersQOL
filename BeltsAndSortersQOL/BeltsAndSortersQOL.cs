@@ -55,10 +55,10 @@ namespace BeltsAndSortersQOL
                         Label falseLabel = ilgen.DefineLabel();//jump here if condition is false, to the end of method
                         Label continueLabel = ilgen.DefineLabel();//skip onUp && waitForConfirm if onDown is true
                         List<Label> falseLabelList = new();//matcher adds only IEnumerables of labels
-                        List<Label> continueLabelList = new();
-                        FieldInfo insertAnchor = typeof(VFInput.InputValue).GetField("onDown");
                         falseLabelList.Add(falseLabel);
+                        List<Label> continueLabelList = new();
                         continueLabelList.Add(continueLabel);
+                        FieldInfo insertAnchor = typeof(VFInput.InputValue).GetField("onDown");
                         /*
                         find
                             call      valuetype VFInput/InputValue VFInput::get__buildConfirm()
@@ -91,7 +91,11 @@ namespace BeltsAndSortersQOL
                                 new CodeInstruction(OpCodes.Brfalse, falseLabel),
                                 new CodeInstruction(OpCodes.Ldarg_0),
                                 new CodeInstruction(OpCodes.Ldfld, typeof(BuildTool_Path).GetField("waitForConfirm")),
-                                new CodeInstruction(OpCodes.Brfalse, falseLabel)
+                                new CodeInstruction(OpCodes.Brfalse, falseLabel),
+                                new CodeInstruction(OpCodes.Ldarg_0),
+                                new CodeInstruction(OpCodes.Ldfld, typeof(BuildTool_Path).GetField("pathPointCount")),
+                                new CodeInstruction(OpCodes.Ldc_I4_1),
+                                new CodeInstruction(OpCodes.Ble, falseLabel)
                             );
                             matcher.AddLabels(continueLabelList);
                             matcher.End();
@@ -240,16 +244,11 @@ namespace BeltsAndSortersQOL
                 {
                     CodeMatcher matcher = new(instructions);
                     MethodInfo rep = typeof(BeltsAndSortersQOL).GetMethod("CursorText_DeterminePreviews");
-                    MethodInfo repShort = typeof(BeltsAndSortersQOL).GetMethod("ShortCursorText_DeterminePreviews");
                     matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldstr && (String)i.operand == "选择起始位置"));
                     if (matcher.Pos != -1) 
                     {
                         matcher.RemoveInstructions(2);
-                        if (shortVerOfAltitudeAndLength.Value) {
-                            matcher.Insert(new CodeInstruction(OpCodes.Call, repShort));
-                        } else {
-                            matcher.Insert(new CodeInstruction(OpCodes.Call, rep));
-                        }
+                        matcher.Insert(new CodeInstruction(OpCodes.Call, rep));
                         //Log to see what we changed
                         //foreach (CodeInstruction ins in matcher.InstructionsInRange(matcher.Pos - 3, matcher.Pos + 10)) Debug.Log("........... " + ins.ToString());
                     }
@@ -266,16 +265,11 @@ namespace BeltsAndSortersQOL
                 {
                     CodeMatcher matcher = new(instructions);
                     MethodInfo rep = typeof(BeltsAndSortersQOL).GetMethod("CursorText_CheckBuildConditions");
-                    MethodInfo repShort = typeof(BeltsAndSortersQOL).GetMethod("ShortCursorText_CheckBuildConditions");
                     matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldstr && (String)i.operand == "点击鼠标建造"));
                     if (matcher.Pos != -1) 
                     {
                         matcher.RemoveInstructions(8);
-                        if (shortVerOfAltitudeAndLength.Value) {
-                            matcher.Insert(new CodeInstruction(OpCodes.Call, repShort));
-                        } else {
-                            matcher.Insert(new CodeInstruction(OpCodes.Call, rep));
-                        }
+                        matcher.Insert(new CodeInstruction(OpCodes.Call, rep));
                         //Log to see what we changed
                         //foreach (CodeInstruction ins in matcher.InstructionsInRange(matcher.Pos - 3, matcher.Pos + 10)) Debug.Log("........... " + ins.ToString());
                     }
@@ -286,6 +280,7 @@ namespace BeltsAndSortersQOL
 
         }
 
+        //Method from SnapBeltHeight mod
         public static int ObjectAltitude(Vector3 pos)
         {
             PlanetAuxData aux = GameMain.mainPlayer.controller.actionBuild.planetAux;
@@ -293,7 +288,6 @@ namespace BeltsAndSortersQOL
             {
                 return 0;
             }
-            //Snapの第2引数をtrueにすると地面にスナップする
             Vector3 ground = aux.Snap(pos, true);
             float distance = Vector3.Distance(pos, ground);
             return (int)Math.Round(distance / PlanetGrid.kAltGrid);
@@ -310,25 +304,20 @@ namespace BeltsAndSortersQOL
         }
         public static String CursorText_DeterminePreviews() {
             BuildTool_Path tool = GameMain.mainPlayer.controller.actionBuild.pathTool;
-            String altitude = tool.altitude.ToString();
+            String altitude = (tool.altitude + 1).ToString();
+            if (shortVerOfAltitudeAndLength.Value) {
+                return "A: " + altitude + " | L: 0";
+            }
             return "Altitude: " + altitude + System.Environment.NewLine + "Length: 0";
-        }
-        public static String ShortCursorText_DeterminePreviews() {
-            BuildTool_Path tool = GameMain.mainPlayer.controller.actionBuild.pathTool;
-            String altitude = tool.altitude.ToString();
-            return "A: " + altitude + " | L: 0";
         }
         public static String CursorText_CheckBuildConditions() {
             BuildTool_Path tool = GameMain.mainPlayer.controller.actionBuild.pathTool;
-            String altitude = tool.altitude.ToString();
+            String altitude = (tool.altitude + 1).ToString();
             String length = tool.pathPointCount.ToString();
+            if (shortVerOfAltitudeAndLength.Value) {
+                return "A: " + altitude + " | L: " + length;
+            }
             return "Altitude: " + altitude + System.Environment.NewLine + "Length: " + length;
-        }
-        public static String ShortCursorText_CheckBuildConditions() {
-            BuildTool_Path tool = GameMain.mainPlayer.controller.actionBuild.pathTool;
-            String altitude = tool.altitude.ToString();
-            String length = tool.pathPointCount.ToString();
-            return "A: " + altitude + " | L: " + length;
         }
 
     }
