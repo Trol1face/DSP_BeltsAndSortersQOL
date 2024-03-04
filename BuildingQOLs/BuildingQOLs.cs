@@ -10,7 +10,7 @@ using System;
 
 namespace BuildingQOLs
 {
-    [BepInPlugin(__GUID__, __NAME__, "1.0.0")]
+    [BepInPlugin(__GUID__, __NAME__, "1.0.1")]
     public class BuildingQOLs : BaseUnityPlugin
     {
         public const string __NAME__ = "BuildingQOLs";
