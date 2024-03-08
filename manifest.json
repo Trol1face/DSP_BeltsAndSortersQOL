@@ -1,9 +1,9 @@
 {
     "name": "BuildingQOLs",
-    "version_number": "1.0.1",
+    "version_number": "1.0.2",
     "website_url": "https://github.com/Trol1face/DSP_BuildingQOLs",
     "description": "Contains a couple of QOL options related to building process.",
     "dependencies": [
-     
+    "xiaoye97-BepInEx-5.4.17"
     ]
 }
