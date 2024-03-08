@@ -21,6 +21,9 @@ namespace BuildingQOLs
         public static ConfigEntry<bool> altitudeValueInCursorText;
         public static ConfigEntry<bool> shortVerOfAltitudeAndLength;
         public static ConfigEntry<bool> autoTakeBeltsAltitude;
+        public static ConfigEntry<bool> ejectDronesAtFasterSpeed;
+        public static ConfigEntry<float> maxEjectSpeedMultiplier;
+        
 
         private void Awake()
         {
@@ -38,6 +41,10 @@ namespace BuildingQOLs
                 "Enable this in addition to previous config to change form from *Altitude: n/Length: n* to short version *A: n| L: n");
             autoTakeBeltsAltitude = Config.Bind("General", "autoTakeBeltsAltitude", true,
                 "If you start a belt in another belt your current altitude will change to this belt's altitude automaticly");
+            ejectDronesAtFasterSpeed = Config.Bind("General", "ejectDronesAtFasterSpeed", true,
+            "Changes the maximum speed at which construction drones will be launched. Value is below");
+            maxEjectSpeedMultiplier = Config.Bind("General", "maxEjectSpeedMultiplier", 2.0f,
+            "Eject speed limit is 'walkspeed * this multiplier'. Default is 1.2");
             
             new Harmony(__GUID__).PatchAll(typeof(Patch));
         }
@@ -66,18 +73,15 @@ namespace BuildingQOLs
                             brfalse   IL_00C7
                             call      void VFInput::UseMouseLeft()
                         */
-                        //Debug.Log("....Matching for insert started. Matcher pos " + matcher.Pos);
                         matcher.Start();
                         matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldfld && i.operand is FieldInfo f && f == insertAnchor));
                         if (matcher.Pos != 0) {
-                            //Debug.Log("....Searching onDown. Found " + matcher.Instruction.ToString());
                             /*
                                 four lines i'm using. Deleting first 3, and changing with my own condition. 
                                 continueLabel is added to UseMouseLeft() method
                                 falseLabel is added to ldc.i4.0 in the end of method
                             */
                             
-
                             //target and delete the condition.
                             matcher.Advance(-1);//current pos is ldfld onDown, i'm deleting call before it too
                             matcher.RemoveInstructions(3);
@@ -107,7 +111,6 @@ namespace BuildingQOLs
                                 ret
                             */
                             matcher.MatchBack(true, new CodeMatch(i => i.opcode == OpCodes.Ldc_I4_0));
-                            //Debug.Log("....Searching for LDC_I4_0. Found " + matcher.Instruction.ToString());
                             matcher.AddLabels(falseLabelList);
                             
                             //foreach (CodeInstruction ins in matcher.Instructions()) Debug.Log(".. " + ins.ToString());
@@ -117,7 +120,6 @@ namespace BuildingQOLs
                     if (autoTakeBeltsAltitude.Value) 
                     {
                         MethodInfo anchor = typeof(BuildTool).GetMethod("GetObjectPose");
-                        //This method finds an altitude of belt that was clicked on
                         MethodInfo rep = typeof(BuildingQOLs).GetMethod("TakeOnCursorBeltAltitude");
                         FieldInfo altitude = typeof(BuildTool_Path).GetField("altitude");
                         matcher.Start();
@@ -156,18 +158,15 @@ namespace BuildingQOLs
                     FieldInfo anchor = typeof(VFInput.InputValue).GetField("onDown");
                     FieldInfo rep = typeof(VFInput.InputValue).GetField("onUp");
                     int insertIndex = -1;
-                    // Grab all the instructions
                     var codes = new List<CodeInstruction>(instructions);
                     for(int i = 0; i < codes.Count; i++)
                     {
                         if(codes[i].opcode == OpCodes.Ldfld && codes[i].operand is FieldInfo o && o == anchor)
                         {
-                        //Debug.Log(" insertIndex detected in this line: " + i);
                             insertIndex = i;
                             break;
 
                         }
-                        //Debug.Log("");
                     }
                     if (insertIndex > -1)
                     {
@@ -204,7 +203,6 @@ namespace BuildingQOLs
                     );
                     if (matcher.Pos != -1) 
                     {
-                        //Debug.Log("...Found destination point here " + matcher.Pos);
                         matcher.AddLabels(labelList);
                         matcher.Start();
                         /*
@@ -224,10 +222,8 @@ namespace BuildingQOLs
                         new CodeMatch(i => i.opcode == OpCodes.Call  && i.operand is MethodInfo m && m == anchor)
                         );
                         if (matcher.Pos != 0) {
-                            //Debug.Log("...Found jump point here " + matcher.Pos + 1);
                             matcher.Advance(1);//moving from Ble
                             matcher.Insert(jumpPoint);
-                            //Debug.Log("..Inserted jump " + jumpPoint.ToString());
                             //foreach (CodeInstruction ins in matcher.Instructions()) Debug.Log(".. " + ins.ToString());
                             return matcher.InstructionEnumeration();
                         }
@@ -249,8 +245,6 @@ namespace BuildingQOLs
                     {
                         matcher.RemoveInstructions(2);
                         matcher.Insert(new CodeInstruction(OpCodes.Call, rep));
-                        //Log to see what we changed
-                        //foreach (CodeInstruction ins in matcher.InstructionsInRange(matcher.Pos - 3, matcher.Pos + 10)) Debug.Log("........... " + ins.ToString());
                     }
                     return matcher.InstructionEnumeration();
                 }
@@ -264,14 +258,34 @@ namespace BuildingQOLs
                 if(altitudeValueInCursorText.Value) 
                 {
                     CodeMatcher matcher = new(instructions);
-                    MethodInfo rep = typeof(BuildingQOLs).GetMethod("CursorText_CheckBuildConditions");
+                    MethodInfo rep = typeof(BuildingQOLs).GetMethod("CursorText_CheckBuildConditions_ConditionOK");
                     matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldstr && (String)i.operand == "点击鼠标建造"));
                     if (matcher.Pos != -1) 
                     {
                         matcher.RemoveInstructions(8);
                         matcher.Insert(new CodeInstruction(OpCodes.Call, rep));
-                        //Log to see what we changed
-                        //foreach (CodeInstruction ins in matcher.InstructionsInRange(matcher.Pos - 3, matcher.Pos + 10)) Debug.Log("........... " + ins.ToString());
+                    }
+                    return matcher.InstructionEnumeration();
+                }
+                return instructions;
+            }
+
+            [HarmonyTranspiler, HarmonyPatch(typeof(Mecha), "CheckEjectConstructionDroneCondition")]
+            public static object Mecha_CheckEjectConstructionDroneCondition_Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator ilgen)
+            {
+                if(ejectDronesAtFasterSpeed.Value) 
+                {
+                    CodeMatcher matcher = new(instructions);
+                    FieldInfo anchor = typeof(Mecha).GetField("walkSpeed");
+                    matcher.MatchForward(true, 
+                        new CodeMatch(i => i.opcode == OpCodes.Ldfld && i.operand is FieldInfo f && f == anchor),
+                        new CodeMatch(i => i.opcode == OpCodes.Ldc_R4)
+                        );
+                    foreach (CodeInstruction ins in matcher.Instructions()) Debug.Log(".. " + ins.ToString());
+
+                    if (matcher.Pos != -1) 
+                    {
+                        matcher.SetOperandAndAdvance(maxEjectSpeedMultiplier.Value);
                     }
                     return matcher.InstructionEnumeration();
                 }
@@ -310,7 +324,7 @@ namespace BuildingQOLs
             }
             return "Altitude: " + altitude + System.Environment.NewLine + "Length: 0";
         }
-        public static String CursorText_CheckBuildConditions() {
+        public static String CursorText_CheckBuildConditions_ConditionOK() {
             BuildTool_Path tool = GameMain.mainPlayer.controller.actionBuild.pathTool;
             String altitude = (tool.altitude + 1).ToString();
             String length = tool.pathPointCount.ToString();
