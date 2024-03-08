@@ -21,8 +21,8 @@ namespace BuildingQOLs
         public static ConfigEntry<bool> altitudeValueInCursorText;
         public static ConfigEntry<bool> shortVerOfAltitudeAndLength;
         public static ConfigEntry<bool> autoTakeBeltsAltitude;
-        public static ConfigEntry<bool> ejectDronesAtFasterSpeed;
-        public static ConfigEntry<float> maxEjectSpeedMultiplier;
+        //public static ConfigEntry<bool> ejectDronesAtFasterSpeed;
+        //public static ConfigEntry<float> maxEjectSpeedMultiplier;
         
 
         private void Awake()
@@ -41,10 +41,10 @@ namespace BuildingQOLs
                 "Enable this in addition to previous config to change form from *Altitude: n/Length: n* to short version *A: n| L: n");
             autoTakeBeltsAltitude = Config.Bind("General", "autoTakeBeltsAltitude", true,
                 "If you start a belt in another belt your current altitude will change to this belt's altitude automaticly");
-            ejectDronesAtFasterSpeed = Config.Bind("General", "ejectDronesAtFasterSpeed", true,
-            "Changes the maximum speed at which construction drones will be launched. Value is below");
-            maxEjectSpeedMultiplier = Config.Bind("General", "maxEjectSpeedMultiplier", 2.0f,
-            "Eject speed limit is 'walkspeed * this multiplier'. Default is 1.2");
+            //ejectDronesAtFasterSpeed = Config.Bind("General", "ejectDronesAtFasterSpeed", true,
+            //"Changes the maximum speed at which construction drones will be launched. Value is below");
+            //maxEjectSpeedMultiplier = Config.Bind("General", "maxEjectSpeedMultiplier", 2.0f,
+            //"Eject speed limit is 'walkspeed * this multiplier'. Default is 1.2");
             
             new Harmony(__GUID__).PatchAll(typeof(Patch));
         }
@@ -103,7 +103,6 @@ namespace BuildingQOLs
                             );
                             matcher.AddLabels(continueLabelList);
                             matcher.End();
-                            //Debug.Log("END pos is" + matcher.Pos);
                             /*
                             find
                                 ...
@@ -282,10 +281,7 @@ namespace BuildingQOLs
                     new CodeMatch(i => i.opcode == OpCodes.Callvirt && i.operand is MethodInfo f && f == typeof(BuildPreview).GetMethod("get_conditionText")),
                     new CodeMatch(i => i.opcode == OpCodes.Stfld && i.operand is FieldInfo f && f == typeof(BuildModel).GetField("cursorText"))
                     );
-                    int i = 0;
-                    foreach (CodeInstruction ins in matcher.Instructions()) Debug.Log(i++ + ".. " + ins.ToString());
                     matcher.Insert(new CodeInstruction(OpCodes.Call, repNotOK));
-
                     matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldstr && (String)i.operand == "点击鼠标建造"));
                     matcher.RemoveInstructions(8);
                     matcher.Insert(new CodeInstruction(OpCodes.Call, repOK));
@@ -294,6 +290,7 @@ namespace BuildingQOLs
                 return instructions;
             }
 
+            /* USELESS RN
             [HarmonyTranspiler, HarmonyPatch(typeof(Mecha), "CheckEjectConstructionDroneCondition")]
             public static object Mecha_CheckEjectConstructionDroneCondition_Transpiler(IEnumerable<CodeInstruction> instructions, ILGenerator ilgen)
             {
@@ -315,6 +312,7 @@ namespace BuildingQOLs
                 }
                 return instructions;
             }
+            */
 
         }
 
