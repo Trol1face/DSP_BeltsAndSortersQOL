@@ -258,13 +258,37 @@ namespace BuildingQOLs
                 if(altitudeValueInCursorText.Value) 
                 {
                     CodeMatcher matcher = new(instructions);
-                    MethodInfo rep = typeof(BuildingQOLs).GetMethod("CursorText_CheckBuildConditions_ConditionOK");
+                    MethodInfo repOK = typeof(BuildingQOLs).GetMethod("CursorText_CheckBuildConditions_ConditionOK");
+                    MethodInfo repNotOK = typeof(BuildingQOLs).GetMethod("CursorText_CheckBuildConditions_ConditionNotOK");
+                    /*
+                    find
+                        ldc.i4.m1
+                        stfld     int32 BuildModel::cursorState
+                        ldarg.0
+                        call      instance class PlayerAction_Build BuildTool::get_actionBuild()
+                        ldfld     class BuildModel PlayerAction_Build::model
+                        ldloc.s   V_130
+                        callvirt  instance string BuildPreview::get_conditionText()
+                    >>insert here<<
+                        stfld     string BuildModel::cursorText
+                    */
+                    matcher.MatchForward(true, 
+                    new CodeMatch(i => i.opcode == OpCodes.Ldc_I4_M1),
+                    new CodeMatch(i => i.opcode == OpCodes.Stfld),
+                    new CodeMatch(i => i.opcode == OpCodes.Ldarg_0),
+                    new CodeMatch(i => i.opcode == OpCodes.Call),
+                    new CodeMatch(i => i.opcode == OpCodes.Ldfld),
+                    new CodeMatch(i => i.opcode == OpCodes.Ldloc_S),
+                    new CodeMatch(i => i.opcode == OpCodes.Callvirt && i.operand is MethodInfo f && f == typeof(BuildPreview).GetMethod("get_conditionText")),
+                    new CodeMatch(i => i.opcode == OpCodes.Stfld && i.operand is FieldInfo f && f == typeof(BuildModel).GetField("cursorText"))
+                    );
+                    int i = 0;
+                    foreach (CodeInstruction ins in matcher.Instructions()) Debug.Log(i++ + ".. " + ins.ToString());
+                    matcher.Insert(new CodeInstruction(OpCodes.Call, repNotOK));
+
                     matcher.MatchForward(true, new CodeMatch(i => i.opcode == OpCodes.Ldstr && (String)i.operand == "点击鼠标建造"));
-                    if (matcher.Pos != -1) 
-                    {
-                        matcher.RemoveInstructions(8);
-                        matcher.Insert(new CodeInstruction(OpCodes.Call, rep));
-                    }
+                    matcher.RemoveInstructions(8);
+                    matcher.Insert(new CodeInstruction(OpCodes.Call, repOK));
                     return matcher.InstructionEnumeration();
                 }
                 return instructions;
@@ -281,7 +305,7 @@ namespace BuildingQOLs
                         new CodeMatch(i => i.opcode == OpCodes.Ldfld && i.operand is FieldInfo f && f == anchor),
                         new CodeMatch(i => i.opcode == OpCodes.Ldc_R4)
                         );
-                    foreach (CodeInstruction ins in matcher.Instructions()) Debug.Log(".. " + ins.ToString());
+                    //foreach (CodeInstruction ins in matcher.Instructions()) Debug.Log(".. " + ins.ToString());
 
                     if (matcher.Pos != -1) 
                     {
@@ -333,6 +357,14 @@ namespace BuildingQOLs
             }
             return "Altitude: " + altitude + System.Environment.NewLine + "Length: " + length;
         }
-
+        public static String CursorText_CheckBuildConditions_ConditionNotOK(String problem) {
+            BuildTool_Path tool = GameMain.mainPlayer.controller.actionBuild.pathTool;
+            String altitude = (tool.altitude + 1).ToString();
+            String length = tool.pathPointCount.ToString();
+            if (shortVerOfAltitudeAndLength.Value) {
+                return "A: " + altitude + " | L: " + length + System.Environment.NewLine + problem;
+            }
+            return "Altitude: " + altitude + System.Environment.NewLine + "Length: " + length + System.Environment.NewLine + problem;
+        }
     }
 }
