@@ -12,4 +12,4 @@ If anything will be bad you can report via github issues (or i'm Spiritfarer in 
 Everything is optional so you can enable/disable any in Config after first game launch with mod enabled. Everything is enabled by default except *Short version of altitude* (however i recommend the short one).
 ## Recent changes
 #### 1.0.2
-When building condition of belt is not OK cursor text with condition problem not will be under Altitude/length, not replacing them.
+When building condition of belt is not OK cursor text with condition problem now will be under Altitude/length, not replacing them.
